@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36203.30 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Gds_location", "Gds_location.vcxproj", "{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Debug|x64.ActiveCfg = Debug|x64
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Debug|x64.Build.0 = Debug|x64
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Debug|x86.ActiveCfg = Debug|Win32
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Debug|x86.Build.0 = Debug|Win32
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Release|x64.ActiveCfg = Release|x64
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Release|x64.Build.0 = Release|x64
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Release|x86.ActiveCfg = Release|Win32
+		{443FA4F8-58AE-496B-9B4D-D1D000AB1EFF}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {08272AE8-0579-45A8-BBF7-BA782EF7D9C9}
+	EndGlobalSection
+EndGlobal

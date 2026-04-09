@@ -1,0 +1,13 @@
+{
+  "scale1": 1.480000,
+  "scale2": 3.900000,
+  "refined_scale2": 3.900000,
+  "final_scale": 5.772000,
+  "score": 0.744568,
+  "peak_ratio": 1.006298,
+  "match_area_ratio": 0.038219,
+  "tested_scale_count": 62,
+  "matched_rect": {"x": 357, "y": 85, "w": 207, "h": 242},
+  "matched_center_px": {"x": 460.500000, "y": 206.000000},
+  "mapped_gds_center": {"x": -5489.220000, "y": -3821.274000}
+}

@@ -1,0 +1,17 @@
+{
+  "scale1": 1.480000,
+  "scale2": 3.900000,
+  "final_scale": 5.772000,
+  "peak_ratio": 1.006298,
+  "match_area_ratio": 0.038219,
+  "matched_center_px": {"x": 460.500000, "y": 206.000000},
+  "mapped_gds_center": {"x": -5489.220000, "y": -3821.274000},
+  "paths": {
+    "mirrored_gds": "registration_results\\gds_mirrored_for_validation.gds",
+    "gds_png": "registration_results\\gds_scale1.png",
+    "roi_png": "registration_results\\roi_selected.png"
+  },
+  "artifact_log": "说明: registration_results\\00_matching_notes.txt\n搜索图: registration_results\\01_search_image_camera_gray.png\n模板图: registration_results\\02_template_best_scale2.png\n框选图: registration_results\\03_match_rect.png\n叠加图: registration_results\\04_match_overlay.png\n响应灰度图: registration_results\\05_response_gray.png\n响应热力图: registration_results\\06_response_heatmap.png\n尺度分数CSV: registration_results\\07_scale2_score_curve.csv\n匹配报告: registration_results\\08_match_report.json\n",
+  "low_confidence": true,
+  "warning": "警告: 当前匹配置信度较低(peak_ratio 过于接近 1.0)，建议重新选择 ROI。"
+}

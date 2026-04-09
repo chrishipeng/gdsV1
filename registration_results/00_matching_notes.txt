@@ -1,0 +1,6 @@
+配准说明
+1) 模板图: 02_template_best_scale2.png
+2) 搜索图: 01_search_image_camera_gray.png
+3) 搜索范围: 全图扫描
+4) 匹配分数: 0.744568
+5) 尺度: scale2=3.9
