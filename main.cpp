@@ -13,14 +13,44 @@
 #include <windows.h>
 #endif
 
+namespace {
+
+std::string escapeJson(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 16);
+    for (char c : s) {
+        switch (c) {
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\"':
+                out += "\\\"";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                out.push_back(c);
+                break;
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
     try {
 #ifdef _WIN32
-        // 统一控制台为 UTF-8，避免中文输出乱码。
         SetConsoleOutputCP(CP_UTF8);
         SetConsoleCP(CP_UTF8);
 #endif
-        // Step1: 解析并校验运行参数。
         RuntimeConfig cfg;
         parseRuntimeArgs(argc, argv, cfg);
         if (cfg.cameraImagePath.empty()) {
@@ -31,7 +61,6 @@ int main(int argc, char* argv[]) {
         }
         std::filesystem::create_directories(cfg.resultDir);
 
-        // Step2: 读取 GDS，并按需要生成镜像 GDS 供后续验证。
         GdsProcessor processor(cfg.gdsPath);
         const std::string mirroredGdsPath =
             (std::filesystem::path(cfg.resultDir) / "gds_mirrored_for_validation.gds").string();
@@ -40,7 +69,6 @@ int main(int argc, char* argv[]) {
             processor.saveLibraryAsGds(mirroredGdsPath);
         }
 
-        // Step3: 将 GDS 渲染为图像并交互式选择 ROI。
         const std::string gdsPngPath =
             (std::filesystem::path(cfg.resultDir) / "gds_scale1.png").string();
         cv::Mat gdsPng = processor.renderToImageByPixelSize(cfg.scale1, gdsPngPath, cfg.renderSupersample);
@@ -51,11 +79,31 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("ROI is empty, please reselect");
         }
 
+        // 模板中心 GDS 物理坐标(µm): 见 GdsProcessor::roiCenterToGds（与 gds_scale1 栅格化互逆）。
+        const cv::Point2d roiCenterGdsUm = processor.roiCenterToGds(roiGdsPng, cfg.scale1);
+        const double roiCenterPxX = roiGdsPng.x + 0.5 * roiGdsPng.width;
+        const double roiCenterPxY = roiGdsPng.y + 0.5 * roiGdsPng.height;
+        const std::string roiGdsJsonPath =
+            (std::filesystem::path(cfg.resultDir) / "roi_center_gds_um.json").string();
+        {
+            std::ofstream j(roiGdsJsonPath);
+            j << std::fixed << std::setprecision(6);
+            j << "{\n";
+            j << "  \"scale1_um_per_px\": " << cfg.scale1 << ",\n";
+            j << "  \"roi_rect_px\": {\"x\": " << roiGdsPng.x << ", \"y\": " << roiGdsPng.y
+              << ", \"w\": " << roiGdsPng.width << ", \"h\": " << roiGdsPng.height << "},\n";
+            j << "  \"roi_center_px_on_gds_png\": {\"x\": " << roiCenterPxX << ", \"y\": " << roiCenterPxY
+              << "},\n";
+            j << "  \"gds_um\": {\"x\": " << roiCenterGdsUm.x << ", \"y\": " << roiCenterGdsUm.y << "}\n";
+            j << "}\n";
+        }
+        std::cout << "ROI→GDS(µm): (" << roiCenterGdsUm.x << "," << roiCenterGdsUm.y << ") → " << roiGdsJsonPath
+                  << std::endl;
+
         const std::string roiPath =
             (std::filesystem::path(cfg.resultDir) / "roi_selected.png").string();
         cv::Mat gdsTemplate = GdsProcessor::saveRoiImage(gdsPng, roiGdsPng, roiPath);
 
-        // Step4: 读取相机图并执行配准。
         cv::Mat cameraGray = cv::imread(cfg.cameraImagePath, cv::IMREAD_GRAYSCALE);
         if (cameraGray.empty()) {
             throw std::runtime_error("Failed to read camera image: " + cfg.cameraImagePath);
@@ -69,57 +117,57 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("Template matching failed");
         }
 
-        // Step5: 保存配准过程产物，便于质量评估。
         std::ostringstream artifactLog;
         GdsProcessor::saveRegistrationArtifacts(cameraGray, reg, cfg.scale1, cfg.resultDir, &artifactLog);
 
-        // Step6: 输出关键指标和结果路径。
-        std::cout << "粗匹配 scale1: " << cfg.scale1 << std::endl;
-        std::cout << "配准 scale2: " << reg.scale2 << std::endl;
-        std::cout << "最终比例(scale1*scale2): " << reg.finalScale << std::endl;
-        std::cout << "peak_ratio(best/second): " << reg.peakRatio << std::endl;
-        std::cout << "匹配面积占比: " << reg.matchAreaRatio << std::endl;
-        std::cout << "匹配中心(像素): (" << reg.matchedCenterPx.x << ", " << reg.matchedCenterPx.y << ")"
-                  << std::endl;
-        std::cout << "映射 GDS 中心: (" << reg.centerGdsX << ", " << reg.centerGdsY << ")" << std::endl;
+        std::cout << "scale1=" << cfg.scale1 << " scale2=" << reg.scale2 << " final=" << reg.finalScale
+                  << " peak_ratio=" << reg.peakRatio << " match_px=(" << reg.matchedCenterPx.x << ","
+                  << reg.matchedCenterPx.y << ")\n";
         if (cfg.exportMirroredGds) {
-            std::cout << "镜像GDS: " << mirroredGdsPath << std::endl;
+            std::cout << mirroredGdsPath << std::endl;
         }
-        std::cout << "gds渲染图: " << gdsPngPath << std::endl;
-        std::cout << "roi图: " << roiPath << std::endl;
-        std::cout << artifactLog.str();
+
+        bool hasMatchedStage = false;
+        double matchedStageXmm = 0.0;
+        double matchedStageYmm = 0.0;
+        if (cfg.hasStageCenter) {
+            constexpr double kImageCenterX = 640.0;
+            constexpr double kImageCenterY = 512.0;
+            const double finalScaleMmPerPx = reg.finalScale * 1e-3;
+            const double dxPx = reg.matchedCenterPx.x - kImageCenterX;
+            const double dyPx = reg.matchedCenterPx.y - kImageCenterY;
+            matchedStageXmm = cfg.stageCenterXmm + dxPx * finalScaleMmPerPx;
+            matchedStageYmm = cfg.stageCenterYmm - dyPx * finalScaleMmPerPx;
+            hasMatchedStage = true;
+            std::cout << "stage(mm): (" << matchedStageXmm << "," << matchedStageYmm << ")\n";
+        }
+
+        const std::string sampleCsvPath =
+            (std::filesystem::path(cfg.resultDir) / "10_stage_mapping_samples.csv").string();
+        if (hasMatchedStage) {
+            const bool csvExists = std::filesystem::exists(sampleCsvPath);
+            std::ofstream sampleCsv(sampleCsvPath, std::ios::app);
+            if (!sampleCsv.is_open()) {
+                std::cout << "CSV open failed: " << sampleCsvPath << std::endl;
+            } else {
+                if (!csvExists) {
+                    sampleCsv << "matched_px_x,matched_px_y,matched_stage_x_mm,matched_stage_y_mm,"
+                                 "gds_template_x_um,gds_template_y_um,scale1,scale2,final_scale,best_score,"
+                                 "peak_ratio\n";
+                }
+                sampleCsv << std::fixed << std::setprecision(6) << reg.matchedCenterPx.x << ","
+                          << reg.matchedCenterPx.y << "," << matchedStageXmm << "," << matchedStageYmm << ","
+                          << roiCenterGdsUm.x << "," << roiCenterGdsUm.y << "," << cfg.scale1 << "," << reg.scale2
+                          << "," << reg.finalScale << "," << reg.score << "," << reg.peakRatio << "\n";
+                std::cout << sampleCsvPath << std::endl;
+            }
+        }
+
         const bool lowConfidence = (reg.peakRatio < 1.05);
         const std::string warningText =
             "警告: 当前匹配置信度较低(peak_ratio 过于接近 1.0)，建议重新选择 ROI。";
         const std::string consoleJsonPath =
             (std::filesystem::path(cfg.resultDir) / "09_console_log.json").string();
-        auto escapeJson = [](const std::string& s) {
-            std::string out;
-            out.reserve(s.size() + 16);
-            for (char c : s) {
-                switch (c) {
-                    case '\\':
-                        out += "\\\\";
-                        break;
-                    case '\"':
-                        out += "\\\"";
-                        break;
-                    case '\n':
-                        out += "\\n";
-                        break;
-                    case '\r':
-                        out += "\\r";
-                        break;
-                    case '\t':
-                        out += "\\t";
-                        break;
-                    default:
-                        out.push_back(c);
-                        break;
-                }
-            }
-            return out;
-        };
         std::ofstream consoleJson(consoleJsonPath);
         consoleJson << std::fixed << std::setprecision(6);
         consoleJson << "{\n";
@@ -128,23 +176,34 @@ int main(int argc, char* argv[]) {
         consoleJson << "  \"final_scale\": " << reg.finalScale << ",\n";
         consoleJson << "  \"peak_ratio\": " << reg.peakRatio << ",\n";
         consoleJson << "  \"match_area_ratio\": " << reg.matchAreaRatio << ",\n";
+        consoleJson << "  \"gds_template_um\": {\n";
+        consoleJson << "    \"roi_center_px_on_gds_png\": {\"x\": " << roiCenterPxX << ", \"y\": "
+                    << roiCenterPxY << "},\n";
+        consoleJson << "    \"gds_um\": {\"x\": " << roiCenterGdsUm.x << ", \"y\": " << roiCenterGdsUm.y << "}\n";
+        consoleJson << "  },\n";
         consoleJson << "  \"matched_center_px\": {\"x\": " << reg.matchedCenterPx.x << ", \"y\": "
                     << reg.matchedCenterPx.y << "},\n";
-        consoleJson << "  \"mapped_gds_center\": {\"x\": " << reg.centerGdsX << ", \"y\": " << reg.centerGdsY
-                    << "},\n";
+        if (cfg.hasStageCenter) {
+            consoleJson << "  \"image_center_stage_mm\": {\"x\": " << cfg.stageCenterXmm << ", \"y\": "
+                        << cfg.stageCenterYmm << "},\n";
+        }
+        if (hasMatchedStage) {
+            consoleJson << "  \"matched_center_stage_mm\": {\"x\": " << matchedStageXmm << ", \"y\": "
+                        << matchedStageYmm << "},\n";
+        }
         consoleJson << "  \"paths\": {\n";
         if (cfg.exportMirroredGds) {
             consoleJson << "    \"mirrored_gds\": \"" << escapeJson(mirroredGdsPath) << "\",\n";
         }
         consoleJson << "    \"gds_png\": \"" << escapeJson(gdsPngPath) << "\",\n";
-        consoleJson << "    \"roi_png\": \"" << escapeJson(roiPath) << "\"\n";
+        consoleJson << "    \"roi_png\": \"" << escapeJson(roiPath) << "\",\n";
+        consoleJson << "    \"roi_gds_json\": \"" << escapeJson(roiGdsJsonPath) << "\"\n";
         consoleJson << "  },\n";
-        consoleJson << "  \"artifact_log\": \"" << escapeJson(artifactLog.str()) << "\",\n";
         consoleJson << "  \"low_confidence\": " << (lowConfidence ? "true" : "false") << ",\n";
         consoleJson << "  \"warning\": \"" << (lowConfidence ? escapeJson(warningText) : "") << "\"\n";
         consoleJson << "}\n";
 
-        std::cout << "控制台日志JSON: " << consoleJsonPath << std::endl;
+        std::cout << consoleJsonPath << "\n" << artifactLog.str();
         if (lowConfidence) {
             std::cout << warningText << std::endl;
         }

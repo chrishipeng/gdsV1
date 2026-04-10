@@ -34,6 +34,14 @@ void parseRuntimeArgs(int argc, char* argv[], RuntimeConfig& cfg) {
     if (readCommandLineArg(argc, argv, "--scale_high", tmp)) cfg.scaleSearchHigh = std::stod(tmp);
     if (readCommandLineArg(argc, argv, "--scale_step", tmp)) cfg.scaleSearchStep = std::stod(tmp);
     if (readCommandLineArg(argc, argv, "--render_ss", tmp)) cfg.renderSupersample = std::max(1, std::stoi(tmp));
+    if (readCommandLineArg(argc, argv, "--stage_center_x_mm", tmp)) {
+        cfg.stageCenterXmm = std::stod(tmp);
+        cfg.hasStageCenter = true;
+    }
+    if (readCommandLineArg(argc, argv, "--stage_center_y_mm", tmp)) {
+        cfg.stageCenterYmm = std::stod(tmp);
+        cfg.hasStageCenter = true;
+    }
     readCommandLineArg(argc, argv, "--result_dir", cfg.resultDir);
     if (readCommandLineArg(argc, argv, "--export_mirrored_gds", tmp)) {
         cfg.exportMirroredGds = !(tmp == "0" || tmp == "false" || tmp == "False");
@@ -357,6 +365,7 @@ void GdsProcessor::saveLibraryAsGds(const std::string& outputPath) const {
     }
 }
 
+// 将 cell 填入 bbox 对应栅格；坐标约定见循环内注释（与 roiCenterToGds 互逆）。
 cv::Mat GdsProcessor::renderToImageByPixelSize(double pixelSizeUm, const std::string& outputPath,
                                                int supersample) const {
     if (m_activeCell == nullptr) throw std::runtime_error("GDS is empty, cannot render");
@@ -374,6 +383,9 @@ cv::Mat GdsProcessor::renderToImageByPixelSize(double pixelSizeUm, const std::st
 
     gdstk::Array<gdstk::Polygon*> polys = {};
     cell->get_polygons(true, true, -1, false, 0, polys);
+    // GDS: X 右为正、Y 上为正。PNG: 原点左上，列 px 向右、行 py 向下。
+    // X 与 px 同向: px ≈ (gx - min.x) / pixelSizeUm。
+    // Y 与 py 反向: 图像第 0 行对齐 GDS 上边 (gy≈max.y)，故 py ≈ (max.y - gy) / pixelSizeUm。
     for (uint64_t i = 0; i < polys.count; ++i) {
         gdstk::Polygon* poly = polys[i];
         std::vector<cv::Point> pts;
@@ -417,6 +429,8 @@ cv::Mat GdsProcessor::saveRoiImage(const cv::Mat& srcGray, const cv::Rect& roi, 
 }
 
 cv::Point2d GdsProcessor::roiCenterToGds(const cv::Rect& roiOnGdsImage, double pixelSizeUm) const {
+    // roiOnGdsImage: 与 renderToImageByPixelSize 输出图同尺寸的像素矩形；左上为 (roi.x, roi.y)。
+    // 与上面栅格化互逆: gx = min.x + px*pixelSizeUm, gy = max.y - py*pixelSizeUm。
     const GdsBBox box = getBoundingBox();
     const double centerPxX = roiOnGdsImage.x + roiOnGdsImage.width * 0.5;
     const double centerPxY = roiOnGdsImage.y + roiOnGdsImage.height * 0.5;
@@ -561,9 +575,6 @@ GdsProcessor::RegistrationResult GdsProcessor::registerRoiToCamera(
         static_cast<double>(out.matchedRect.area()) / static_cast<double>(cameraGray.cols * cameraGray.rows);
     out.matchedCenterPx = cv::Point2d(out.matchedRect.x + out.matchedRect.width * 0.5,
                                       out.matchedRect.y + out.matchedRect.height * 0.5);
-    const cv::Point2d centerGds = roiCenterToGds(roiOnGdsImage, scale1);
-    out.centerGdsX = centerGds.x;
-    out.centerGdsY = centerGds.y;
     return out;
 }
 
@@ -636,29 +647,13 @@ void GdsProcessor::saveRegistrationArtifacts(const cv::Mat& cameraGray, const Re
     report << "  \"matched_rect\": {\"x\": " << reg.matchedRect.x << ", \"y\": " << reg.matchedRect.y
            << ", \"w\": " << reg.matchedRect.width << ", \"h\": " << reg.matchedRect.height << "},\n";
     report << "  \"matched_center_px\": {\"x\": " << reg.matchedCenterPx.x << ", \"y\": " << reg.matchedCenterPx.y
-           << "},\n";
-    report << "  \"mapped_gds_center\": {\"x\": " << reg.centerGdsX << ", \"y\": " << reg.centerGdsY << "}\n";
+           << "}\n";
     report << "}\n";
     std::ofstream reportFile(reportPath);
     reportFile << report.str();
 
     std::ofstream explain(explainPath);
-    explain << "配准说明\n";
-    explain << "1) 模板图: 02_template_best_scale2.png\n";
-    explain << "2) 搜索图: 01_search_image_camera_gray.png\n";
-    explain << "3) 搜索范围: 全图扫描\n";
-    explain << "4) 匹配分数: " << reg.score << "\n";
-    explain << "5) 尺度: scale2=" << reg.scale2 << "\n";
+    explain << "scale2=" << reg.scale2 << " score=" << reg.score << "\n";
 
-    if (log) {
-        *log << "说明: " << explainPath << "\n";
-        *log << "搜索图: " << searchPath << "\n";
-        *log << "模板图: " << bestTplPath << "\n";
-        *log << "框选图: " << matchPath << "\n";
-        *log << "叠加图: " << overlayPath << "\n";
-        *log << "响应灰度图: " << responseGrayPath << "\n";
-        *log << "响应热力图: " << responseHeatPath << "\n";
-        *log << "尺度分数CSV: " << scoreCsvPath << "\n";
-        *log << "匹配报告: " << reportPath << "\n";
-    }
+    if (log) *log << reportPath << "\n";
 }

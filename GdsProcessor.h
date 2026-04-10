@@ -21,6 +21,9 @@ struct RuntimeConfig {
     std::string resultDir = "registration_results";
     bool exportMirroredGds = true;
     bool mirrorLeftRight = true;
+    bool hasStageCenter = false;
+    double stageCenterXmm = 0.0;
+    double stageCenterYmm = 0.0;
 };
 
 bool readCommandLineArg(int argc, char* argv[], const std::string& key, std::string& out);
@@ -85,8 +88,6 @@ public:
         double matchAreaRatio = 0.0;
         cv::Rect matchedRect;
         cv::Point2d matchedCenterPx;
-        double centerGdsX = 0.0;
-        double centerGdsY = 0.0;
         std::vector<double> testedScales;
         std::vector<double> testedScores;
         cv::Mat bestTemplateGray;
@@ -108,6 +109,7 @@ public:
                                            const cv::Rect& roiOnGdsImage, double scale1,
                                            double scaleSearchLow, double scaleSearchHigh,
                                            double scaleSearchStep) const;
+    /// PNG 上 ROI 矩形中心 → GDS 库物理坐标(µm)；实现见 .cpp 中与 renderToImageByPixelSize 互逆。
     cv::Point2d roiCenterToGds(const cv::Rect& roiOnGdsImage, double pixelSizeUm) const;
     static void saveRegistrationArtifacts(const cv::Mat& cameraGray, const RegistrationResult& reg,
                                           double scale1, const std::string& resultDir,
